@@ -263,7 +263,7 @@ const DeleteBook = async (req: Request, res: Response, next: NextFunction) => {
       const bookFilePublicId =
         bookFileParts[bookFileParts.length - 2] +
         "/" +
-        bookFileParts[bookFileParts.length - 1];
+        bookFileParts[bookFileParts.length - 1].split(".")[0];
 
       try {
         await cloudinary.uploader.destroy(bookFilePublicId, {
@@ -286,4 +286,3 @@ const DeleteBook = async (req: Request, res: Response, next: NextFunction) => {
 };
 
 export { createBook, updateBook, listBooks, getSingleBook, DeleteBook };
- 
