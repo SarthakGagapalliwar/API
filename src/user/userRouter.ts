@@ -1,10 +1,10 @@
 // src/routes/userRoutes.ts
 import express from "express";
-import { creteUser } from "./userController";
+import { createUser } from "./userController";
 
 const userRouter = express.Router();
 
 // Routes
-userRouter.post("/register", creteUser);
+userRouter.post("/register", createUser);
 
 export default userRouter;
