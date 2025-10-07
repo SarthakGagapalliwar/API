@@ -114,22 +114,27 @@ const createBook = async (req: Request, res: Response, next: NextFunction) => {
   }
 };
 
+
 const updateBook = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { title, genre } = req.body;
     const bookId = req.params.bookId;
+
+    // 1️⃣ Find the book
     const book = await bookModel.findOne({ _id: bookId });
     if (!book) {
       return next(createHttpError(404, "Book not found"));
     }
-    // check access
+
+    // 2️⃣ Verify author access
     const _req = req as AuthRequest;
     if (book.author.toString() !== _req.userId) {
-      return next(createHttpError(403, "you can not update others book"));
+      return next(createHttpError(403, "You cannot update others' books"));
     }
 
     const fs = await import("fs/promises");
-    // check if image field exists
+
+    // 3️⃣ Handle cover image update
     let updatedCoverImage = book.coverImage;
     if (req.files && (req.files as any).coverImage) {
       const coverImageFile = (req.files as any).coverImage[0];
@@ -139,22 +144,41 @@ const updateBook = async (req: Request, res: Response, next: NextFunction) => {
         coverImageFile.filename
       );
       const coverImageMimeType =
-        coverImageFile.mimetype.split("/").pop() || "png"; // if we ar not not uploding png
+        coverImageFile.mimetype.split("/").pop() || "png";
+
       try {
         await fs.access(filePath);
+
+        // 🧹 Delete old cover image from Cloudinary
+        if (book.coverImage) {
+          const coverFileParts = book.coverImage.split("/");
+          const oldCoverPublicId =
+            coverFileParts[coverFileParts.length - 2] +
+            "/" +
+            coverFileParts[coverFileParts.length - 1].split(".")[0];
+          try {
+            await cloudinary.uploader.destroy(oldCoverPublicId);
+          } catch (deleteErr) {
+            console.warn("Error deleting old cover image:", deleteErr);
+          }
+        }
+
+        // ☁️ Upload new cover image
         const uploadResult = await cloudinary.uploader.upload(filePath, {
           filename_override: coverImageFile.filename,
           folder: "book-covers",
           format: coverImageMimeType,
         });
         updatedCoverImage = uploadResult.secure_url;
+
+        // 🗑️ Delete local file
         await fs.unlink(filePath);
       } catch (err) {
         console.warn("Error updating cover image:", err);
       }
     }
 
-    // same for pdf
+    // 4️⃣ Handle book file (PDF) update
     let updatedFile = book.file;
     if (req.files && (req.files as any).file) {
       const bookFile = (req.files as any).file[0];
@@ -163,8 +187,28 @@ const updateBook = async (req: Request, res: Response, next: NextFunction) => {
         "../../public/data/uploads",
         bookFile.filename
       );
+
       try {
         await fs.access(filePath);
+
+        // 🧹 Delete old PDF from Cloudinary
+        if (book.file) {
+          const bookFileParts = book.file.split("/");
+          const oldBookFilePublicId =
+            bookFileParts[bookFileParts.length - 2] +
+            "/" +
+            bookFileParts[bookFileParts.length - 1].split(".")[0];
+          try {
+            await cloudinary.uploader.destroy(oldBookFilePublicId, {
+              resource_type: "raw",
+            });
+            console.log("Deleted old book file:", oldBookFilePublicId);
+          } catch (deleteErr) {
+            console.warn("Error deleting old book file:", deleteErr);
+          }
+        }
+
+        // ☁️ Upload new book file
         const uploadResult = await cloudinary.uploader.upload(filePath, {
           resource_type: "raw",
           filename_override: bookFile.filename,
@@ -172,12 +216,15 @@ const updateBook = async (req: Request, res: Response, next: NextFunction) => {
           format: "pdf",
         });
         updatedFile = uploadResult.secure_url;
+
+        // 🗑️ Delete local file
         await fs.unlink(filePath);
       } catch (err) {
         console.warn("Error updating book file:", err);
       }
     }
 
+    // 5️⃣ Update database entry
     const updatedBook = await bookModel.findByIdAndUpdate(
       bookId,
       {
@@ -188,11 +235,17 @@ const updateBook = async (req: Request, res: Response, next: NextFunction) => {
       },
       { new: true }
     );
-    res.json(updatedBook);
+
+    // 6️⃣ Send response
+    res.json({
+      message: "Book updated successfully",
+      book: updatedBook,
+    });
   } catch (error) {
     next(error);
   }
 };
+
 
 const listBooks = async (req: Request, res: Response, next: NextFunction) => {
   try {
