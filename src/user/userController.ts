@@ -1,49 +1,49 @@
 import { Request, Response, NextFunction } from "express";
 import createHttpError from "http-errors";
+import bcrypt from "bcrypt";
+import { sign } from "jsonwebtoken";
+import { config } from "../config/config";
 import userModel from "./userModel";
-import bcrypt from "bcrypt"
 
 const createUser = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    console.log("Received body:", req.body);
-
     const { name, email, password } = req.body;
 
-    // Simple validation
     if (!name || !email || !password) {
-      const error = createHttpError(400, "All fields are required");
-      return next(error);
+      return next(createHttpError(400, "All fields are required"));
     }
 
-    //Database call
-    const user=await userModel.findOne({
-    //   email: email if key value are are same use simple
-        email
-    })
-    if(user){
-        const error=createHttpError(400,"User alreday exits with this email");
-        return next(error);
+    const existingUser = await userModel.findOne({ email });
+    if (existingUser) {
+      return next(createHttpError(400, "User already exists with this email"));
     }
-    //password=>hash
 
-    const hashedPassword = await bcrypt.hash(password,10);
+    const hashedPassword = await bcrypt.hash(password, 10);
 
-    const newUser =await userModel.create({
-        name,
-        email,
-        password:hashedPassword,
-    })
-    // Process (e.g., save to DB here)
+    const newUser = await userModel.create({
+      name,
+      email,
+      password: hashedPassword,
+    });
 
-    res.json({id:newUser._id});
+    const jwtSecret = config.jwtSecret;
+    if (!jwtSecret) {
+      return next(createHttpError(500, "JWT secret is not configured"));
+    }
 
-    //Token genration JWT
-    
+    const token = sign({ sub: newUser._id }, jwtSecret, {
+      expiresIn: "7d",
+    });
 
-    // Response
     return res.status(201).json({
       message: "User created successfully",
-      user: { name, email },
+      accessToken: token,
+      user: {
+        id: newUser._id,
+        name: newUser.name,
+        email: newUser.email,
+        createdAt: newUser.createdAt,
+      },
     });
   } catch (error) {
     next(error);
