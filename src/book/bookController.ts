@@ -138,12 +138,13 @@ const updateBook = async (req: Request, res: Response, next: NextFunction) => {
         "../../public/data/uploads",
         coverImageFile.filename
       );
+      const coverImageMimeType = coverImageFile.mimetype.split("/").pop()|| "png"; // if we ar not not uploding png
       try {
         await fs.access(filePath);
         const uploadResult = await cloudinary.uploader.upload(filePath, {
           filename_override: coverImageFile.filename,
           folder: "book-covers",
-          format:coverImageFile
+          format: coverImageMimeType,
         });
         updatedCoverImage = uploadResult.secure_url;
         await fs.unlink(filePath);
@@ -167,7 +168,7 @@ const updateBook = async (req: Request, res: Response, next: NextFunction) => {
           resource_type: "raw",
           filename_override: bookFile.filename,
           folder: "book-pdfs",
-          format:'pdf'
+          format: "pdf",
         });
         updatedFile = uploadResult.secure_url;
         await fs.unlink(filePath);
@@ -192,4 +193,19 @@ const updateBook = async (req: Request, res: Response, next: NextFunction) => {
   }
 };
 
-export { createBook, updateBook };
+
+
+const listBooks = async (req: Request, res: Response, next: NextFunction)=>{
+  try{
+    //todo :add pagination.
+    const book = await bookModel.find();
+
+    res.json(book);
+  }catch(err){
+    return next(createHttpError(500,"Error while getting a book"))
+    console.error(err);
+  }
+  
+}
+
+export { createBook, updateBook,listBooks };
